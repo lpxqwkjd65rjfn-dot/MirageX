@@ -1,0 +1,24 @@
+[package]
+name = "mirage-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MirageX command-line client"
+
+[[bin]]
+name = "miragex"
+path = "src/main.rs"
+
+[dependencies]
+mirage-core = { workspace = true }
+mirage-config = { workspace = true }
+mirage-engine = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }

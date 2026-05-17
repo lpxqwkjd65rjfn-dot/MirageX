@@ -1,0 +1,22 @@
+[package]
+name = "mirage-transport-xhttp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "XHTTP transport (HTTP/2 + HTTP/3) for MirageX"
+
+[dependencies]
+mirage-core = { workspace = true }
+mirage-config = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+http = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+rand = { workspace = true }
