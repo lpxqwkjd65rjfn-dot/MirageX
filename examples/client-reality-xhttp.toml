@@ -1,0 +1,129 @@
+# =====================================================================
+# MirageX — sample client config: VLESS + Reality + XHTTP
+# =====================================================================
+#
+# This template demonstrates the "modern stack" recommended for evading
+# active probing on top of CDN/Web-Server style hosting:
+#
+#   client  ──SOCKS5──>  miragex  ──VLESS(Reality+XHTTP)──>  edge server
+#
+# Replace every <placeholder> with values from your server.
+
+[log]
+level = "info"
+format = "text"
+
+# -------------------------- INBOUND -----------------------------------
+# A SOCKS5 inbound on 127.0.0.1:1080. Point your browser / system proxy
+# settings here.
+[[inbounds]]
+tag    = "socks-in"
+listen = "127.0.0.1:1080"
+type   = "socks"
+allow_tcp = true
+allow_udp = false
+sniffing  = true
+
+# -------------------------- OUTBOUND ----------------------------------
+# Primary outbound: VLESS over Reality + XHTTP.
+[[outbounds]]
+tag      = "proxy"
+protocol = "vless"
+server   = "edge.example.com:443"
+uuid     = "00000000-0000-0000-0000-000000000000"
+# XTLS-Vision is **not** used with XHTTP — leave `flow` blank here. The
+# (Reality + Vision + RAW) recipe lives in client-reality-vision.toml.
+flow     = ""
+
+[outbounds.reality]
+server_name = "www.example.com"
+public_key  = "0000000000000000000000000000000000000000000000000000000000000000"
+short_id    = "0123abcd"
+spider_x    = "/"
+fingerprint = "chrome"
+alpn        = ["h2"]
+
+[outbounds.transport]
+type              = "xhttp"
+path              = "/your-secret-path"
+mode              = "auto"
+max_streams       = 64
+initial_window_kb = 4096
+force_h3          = false
+force_h2          = false
+padding           = "100-1000"
+
+# Direct fallback for everything that the rules don't route through "proxy".
+[[outbounds]]
+tag             = "direct"
+protocol        = "direct"
+domain_strategy = "as-is"
+
+# Block outbound — see routing below.
+[[outbounds]]
+tag      = "block"
+protocol = "block"
+
+# -------------------------- ROUTING -----------------------------------
+[routing]
+domain_strategy = "ip-if-non-match"
+final_outbound  = "proxy"
+
+# Examples of selective routing:
+
+# Bypass LAN / loopback.
+[[routing.rules]]
+description = "bypass LAN"
+when.ip_cidr = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"]
+action.type  = "forward"
+action.outbound = "direct"
+
+# Block known tracking / ads domains (placeholder).
+[[routing.rules]]
+description = "drop ad/track domains"
+when.domain  = ["suffix:doubleclick.net", "suffix:ad.doubleclick.net"]
+action.type  = "block"
+
+# -------------------------- DNS ---------------------------------------
+[dns]
+cache_size = 4096
+no_negative_cache = false
+use_system_resolver = false
+bypass_suffixes = ["local", "lan", "home.arpa"]
+
+[[dns.servers]]
+address = "https://cloudflare-dns.com/dns-query"
+detour  = "proxy"
+fallback = false
+tag      = "doh-cloudflare"
+
+[[dns.servers]]
+address = "tls://1.1.1.1"
+detour  = "proxy"
+fallback = true
+tag      = "dot-cloudflare"
+
+# -------------------------- MOBILE ------------------------------------
+[mobile]
+enabled            = true
+congestion         = "bbr"
+zero_rtt           = true
+prewarm            = 2
+adaptive_mtu       = true
+smooth_roaming     = true
+parallel_streams   = 2
+fec_group          = 0
+fec_redundancy     = 0
+multipath          = "auto"
+retransmit         = "aggressive"
+
+[mobile.pacing]
+enabled = true
+min_inter_packet_us = 0
+burst_bytes = 65536
+
+[mobile.keep_alive]
+enabled = true
+idle_secs = 30
+interval_secs = 10
+probes = 3

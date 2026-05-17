@@ -1,0 +1,62 @@
+# =====================================================================
+# MirageX — sample client config: VLESS + Reality + Vision + RAW TCP
+# =====================================================================
+#
+# The reference "stealth on the wire" stack. Use this when your edge
+# server is dedicated (no shared CDN) and you can run on the same TCP
+# port as a real web server (typically 443).
+#
+#   client  ──SOCKS5──>  miragex  ──VLESS(Reality+Vision+RAW)──>  edge
+
+[log]
+level = "info"
+format = "text"
+
+[[inbounds]]
+tag    = "socks-in"
+listen = "127.0.0.1:1080"
+type   = "socks"
+allow_tcp = true
+allow_udp = false
+sniffing  = true
+
+[[outbounds]]
+tag      = "proxy"
+protocol = "vless"
+server   = "edge.example.com:443"
+uuid     = "00000000-0000-0000-0000-000000000000"
+# The whole point of this template — request XTLS-Vision splicing.
+flow     = "xtls-rprx-vision"
+
+[outbounds.reality]
+server_name = "www.example.com"
+public_key  = "0000000000000000000000000000000000000000000000000000000000000000"
+short_id    = "0123abcd"
+spider_x    = ""
+fingerprint = "chrome"
+alpn        = ["h2"]
+
+[outbounds.transport]
+type = "raw"
+tcp_fast_open = true
+
+# Direct fallback.
+[[outbounds]]
+tag             = "direct"
+protocol        = "direct"
+domain_strategy = "as-is"
+
+[routing]
+final_outbound = "proxy"
+
+[[routing.rules]]
+when.ip_cidr = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"]
+action.type  = "forward"
+action.outbound = "direct"
+
+[mobile]
+enabled          = true
+congestion       = "bbr"
+zero_rtt         = true
+prewarm          = 2
+parallel_streams = 2

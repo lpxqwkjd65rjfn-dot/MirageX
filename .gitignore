@@ -1,0 +1,37 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+*.pdb
+*.rlib
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / runtime
+*.log
+*.pid
+*.sock
+/run/
+/data/
+
+# Local override configs (users)
+local.toml
+local.json
+*.local.toml
+*.local.json
+
+# Mobile / native build artifacts
+/android/build/
+/android/.gradle/
+/android/app/build/
+/ios/build/
+/ios/Pods/
+/ios/DerivedData/
+*.xcuserstate

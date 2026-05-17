@@ -1,0 +1,13 @@
+[package]
+name = "mirage-transport-raw"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Raw TCP transport for MirageX (TFO, keep-alive, congestion advisor)"
+
+[dependencies]
+mirage-core = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

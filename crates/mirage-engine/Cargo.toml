@@ -1,0 +1,32 @@
+[package]
+name = "mirage-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MirageX engine — inbounds, outbounds, dispatcher, routing"
+
+[dependencies]
+mirage-core = { workspace = true }
+mirage-config = { workspace = true }
+mirage-proto-vless = { workspace = true }
+mirage-tls-reality = { workspace = true }
+mirage-transport-raw = { workspace = true }
+mirage-transport-xhttp = { workspace = true }
+mirage-vision = { workspace = true }
+mirage-mobile = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+ahash = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

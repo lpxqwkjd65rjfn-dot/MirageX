@@ -1,0 +1,14 @@
+[package]
+name = "mirage-vision"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "XTLS-Vision flow framing helpers for MirageX"
+
+[dependencies]
+mirage-core = { workspace = true }
+bytes = { workspace = true }
+rand = { workspace = true }
+tracing = { workspace = true }
