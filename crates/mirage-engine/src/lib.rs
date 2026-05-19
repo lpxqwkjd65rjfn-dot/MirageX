@@ -27,6 +27,7 @@
 
 pub mod dispatcher;
 pub mod inbound;
+pub mod net;
 pub mod outbound;
 pub mod router;
 pub mod runtime;

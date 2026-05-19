@@ -1,0 +1,21 @@
+[package]
+name = "mirage-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "MirageX — bidirectional I/O copy paths. Adaptive BDP-sized buffers for high-RTT paths, vectored reads on the hot path, and a Linux splice(2) zero-copy fast path (scaffolded; lands in a follow-up)."
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+
+mirage-core = { workspace = true }
+mirage-mobile = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }

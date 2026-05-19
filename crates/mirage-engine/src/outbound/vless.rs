@@ -12,41 +12,81 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 use tracing::{debug, trace};
 
+use mirage_config::mobile::MobileConfig;
 use mirage_config::outbound::{RealityConfig as RealityCfgInput, VlessOutbound as VlessCfg};
 use mirage_config::transport::TransportSettings;
+use mirage_core::address::Address;
 use mirage_core::error::{Error, Result};
 use mirage_core::network::Network;
+use mirage_mobile::Prewarmer;
+use mirage_net::options::SocketOptions;
+use mirage_net::resolve::FamilyOrder;
 use mirage_proto_vless::{encode_request, parse_response_header, Command, Request, RequestAddons};
 use mirage_tls_reality::{RealityConfig, RealityConnector};
-use mirage_transport_raw::{RawDialOptions, RawDialer};
 
 use crate::dispatcher::{DuplexStream, Outbound, Session};
+use crate::net::options_from_mobile;
 
-/// VLESS outbound.
+/// VLESS outbound. Holds the pre-built Reality connector and (optionally)
+/// a small TCP pre-warm pool: a configurable number of TCP connections to
+/// `cfg.server` are kept hot at all times, so the first flow of a given
+/// session skips connect-RTT entirely.
 pub struct Vless {
     tag: String,
     cfg: Arc<VlessCfg>,
-    dialer: RawDialer,
+    opts: SocketOptions,
+    family_order: FamilyOrder,
     reality: Option<RealityConnector>,
+    prewarm: Option<Prewarmer<TcpStream>>,
 }
 
 impl Vless {
     /// Build a VLESS outbound from its parsed configuration. Pre-builds the
-    /// Reality connector so the per-flow dial path stays lean.
-    pub fn new(tag: String, cfg: VlessCfg) -> Result<Self> {
+    /// Reality connector and (when `mobile.prewarm > 0`) spins up a
+    /// background task that maintains a TCP pre-warm pool against
+    /// `cfg.server`.
+    pub fn new(tag: String, cfg: VlessCfg, mobile: &MobileConfig) -> Result<Self> {
         let reality = if let Some(r) = cfg.reality.as_ref() {
             Some(RealityConnector::new(into_reality_config(r)?)?)
         } else {
             None
         };
-        let dialer = RawDialer::new(RawDialOptions::fast());
+        let opts = options_from_mobile(mobile);
+        let family_order = FamilyOrder::default();
+        let prewarm = if mobile.enabled && mobile.prewarm > 0 {
+            let target = usize::from(mobile.prewarm);
+            let pool: Prewarmer<TcpStream> = Prewarmer::new(target);
+            // Spin up the maintenance task: keep `target` TCP-level dials hot
+            // to `cfg.server`. Reality / VLESS handshake still happens
+            // per-flow, but we save the TCP connect-RTT (and the LTE radio
+            // wake-up jitter on top of it).
+            let server = cfg.server.clone();
+            let opts_for_task = opts.clone();
+            let fam = family_order;
+            pool.spawn(move || {
+                let server = server.clone();
+                let opts = opts_for_task.clone();
+                async move {
+                    let addr: Address = server.parse().map_err(|e| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{e}"))
+                    })?;
+                    mirage_net::dial::dial_with(&addr, &opts, fam).await
+                }
+            });
+            Some(pool)
+        } else {
+            None
+        };
         Ok(Self {
             tag,
             cfg: Arc::new(cfg),
-            dialer,
+            opts,
+            family_order,
             reality,
+            prewarm,
         })
     }
 }
@@ -74,7 +114,18 @@ impl Outbound for Vless {
         }
 
         trace!(server = %self.cfg.server, tag = %self.tag, "vless: dialing");
-        let tcp = self.dialer.connect(&self.cfg.server).await?;
+        // Hot path: grab a pre-warmed TCP from the pool when available.
+        let tcp = if let Some(pre) = self.prewarm.as_ref().and_then(Prewarmer::take) {
+            trace!(tag = %self.tag, "vless: using prewarm tcp");
+            pre
+        } else {
+            let server: Address = self.cfg.server.parse().map_err(|e| {
+                Error::Config(format!("vless: bad server `{}`: {e}", self.cfg.server))
+            })?;
+            mirage_net::dial::dial_with(&server, &self.opts, self.family_order)
+                .await
+                .map_err(Error::Io)?
+        };
 
         // Outer transport: today we support Raw + Reality. XHTTP / WebSocket / gRPC
         // wrap their own transports and will plug in here once their connect-path

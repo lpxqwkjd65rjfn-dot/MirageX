@@ -4,38 +4,62 @@
 use std::sync::Arc;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
 use tracing::{debug, error, info, warn};
 
 use mirage_config::inbound::InboundConfig;
+use mirage_config::mobile::MobileConfig;
 use mirage_core::address::{Address, Host};
 use mirage_core::error::{Error, Result};
 use mirage_core::network::Network;
+use mirage_io::adaptive::{copy_bidirectional_adaptive, AdaptiveConfig};
 
 use crate::dispatcher::{Dispatcher, Session};
+use crate::net::options_from_mobile;
 
 /// Spawn a per-inbound listener task. Returns once the listener is bound.
-pub async fn spawn(cfg: InboundConfig, dispatcher: Arc<Dispatcher>) -> Result<()> {
+pub async fn spawn(
+    cfg: InboundConfig,
+    dispatcher: Arc<Dispatcher>,
+    mobile: Arc<MobileConfig>,
+) -> Result<()> {
     match &cfg.kind {
-        mirage_config::inbound::InboundKind::Socks(_) => spawn_socks(cfg, dispatcher).await,
+        mirage_config::inbound::InboundKind::Socks(_) => spawn_socks(cfg, dispatcher, mobile).await,
         other => Err(Error::Config(format!(
             "inbound kind not yet implemented: {other:?}"
         ))),
     }
 }
 
-async fn spawn_socks(cfg: InboundConfig, dispatcher: Arc<Dispatcher>) -> Result<()> {
-    let listener = TcpListener::bind(&cfg.listen).await?;
+async fn spawn_socks(
+    cfg: InboundConfig,
+    dispatcher: Arc<Dispatcher>,
+    mobile: Arc<MobileConfig>,
+) -> Result<()> {
+    let opts = options_from_mobile(&mobile);
+    let listen_addr = cfg.listen.parse::<std::net::SocketAddr>().map_err(|e| {
+        Error::Config(format!(
+            "inbound `{}`: bad listen `{}`: {e}",
+            cfg.tag, cfg.listen
+        ))
+    })?;
+    let listener =
+        mirage_net::listen::listen_with(listen_addr, &opts, mirage_net::listen::DEFAULT_BACKLOG)
+            .await
+            .map_err(Error::Io)?;
     info!(listen = %cfg.listen, tag = %cfg.tag, "socks inbound started");
     let cfg = Arc::new(cfg);
     tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((sock, peer)) => {
+                    // Apply the same post-connect socket policy (keep-alive,
+                    // user_timeout, …) to accepted client sockets too.
+                    opts.apply_post(&sock);
                     let dispatcher = dispatcher.clone();
                     let cfg = cfg.clone();
+                    let mobile = mobile.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_socks(sock, peer, cfg, dispatcher).await {
+                        if let Err(e) = handle_socks(sock, peer, cfg, dispatcher, mobile).await {
                             warn!(?peer, "socks: connection ended with error: {e}");
                         }
                     });
@@ -55,6 +79,7 @@ async fn handle_socks(
     peer: std::net::SocketAddr,
     cfg: Arc<InboundConfig>,
     dispatcher: Arc<Dispatcher>,
+    mobile: Arc<MobileConfig>,
 ) -> Result<()> {
     // -- Handshake -------------------------------------------------------
     let mut head = [0u8; 2];
@@ -142,15 +167,35 @@ async fn handle_socks(
         .await
         .map_err(Error::Io)?;
 
-    // Bidirectional copy.
-    let (mut up_r, mut up_w) = tokio::io::split(upstream);
-    let (mut dn_r, mut dn_w) = sock.split();
-    tokio::try_join!(
-        tokio::io::copy(&mut dn_r, &mut up_w),
-        tokio::io::copy(&mut up_r, &mut dn_w),
-    )
-    .map_err(Error::Io)?;
+    // BDP-adaptive bidirectional pump. The expected bandwidth comes from
+    // a conservative "cellular default" until the engine learns a real
+    // per-flow bandwidth estimate; the initial buffer is much larger than
+    // tokio's default 8 KiB so even short flows benefit on high-RTT paths.
+    let adaptive = AdaptiveConfig {
+        initial_buf: 256 * 1024,
+        max_buf: 4 * 1024 * 1024,
+        expected_bw_bps: bw_hint_for(&mobile),
+        rtt: None,
+    };
+    let mut upstream = upstream;
+    copy_bidirectional_adaptive(&mut sock, &mut *upstream, &adaptive)
+        .await
+        .map_err(Error::Io)?;
     Ok(())
+}
+
+/// Pick an expected-bandwidth hint based on the mobile profile.
+/// 100 Mbit for aggressive, 50 Mbit for balanced, 25 Mbit for conservative.
+fn bw_hint_for(m: &MobileConfig) -> u64 {
+    use mirage_config::mobile::RetransmitProfile;
+    if !m.enabled {
+        return 0;
+    }
+    match m.retransmit {
+        RetransmitProfile::Conservative => 25_000_000,
+        RetransmitProfile::Balanced => 50_000_000,
+        RetransmitProfile::Aggressive => 100_000_000,
+    }
 }
 
 // `Outbound` is a trait — explicit import so `outbound.dial(...)` resolves.
