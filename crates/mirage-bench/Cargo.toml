@@ -1,0 +1,26 @@
+[package]
+name = "mirage-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "MirageX — throughput + latency micro-benchmarks. Spawns an in-process echo server, dials it through the MirageX engine, and prints MB/s + p50/p95/p99 latency."
+publish = false
+
+[[bin]]
+name = "mirage-bench"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+bytes = { workspace = true }
+
+mirage-core = { workspace = true }
+mirage-net = { workspace = true }
+mirage-io = { workspace = true }
+mirage-mobile = { workspace = true }

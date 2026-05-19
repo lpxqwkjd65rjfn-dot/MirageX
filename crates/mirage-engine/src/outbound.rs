@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 use tracing::trace;
 
+use mirage_config::mobile::MobileConfig;
 use mirage_config::outbound::{
     DirectOutbound, OutboundConfig, OutboundKind, VlessOutbound as VlessCfg,
 };
@@ -29,11 +30,17 @@ pub enum AnyOutbound {
 }
 
 impl AnyOutbound {
-    /// Build from a parsed configuration node.
-    pub fn from_config(cfg: &OutboundConfig) -> Result<Self> {
+    /// Build from a parsed configuration node + the `[mobile]` policy block.
+    pub fn from_config(cfg: &OutboundConfig, mobile: &MobileConfig) -> Result<Self> {
         match &cfg.kind {
-            OutboundKind::Direct(d) => Ok(Self::Direct(Direct::new(cfg.tag.clone(), d.clone()))),
-            OutboundKind::Vless(v) => Ok(Self::Vless(Vless::new(cfg.tag.clone(), v.clone())?)),
+            OutboundKind::Direct(d) => Ok(Self::Direct(Direct::new(
+                cfg.tag.clone(),
+                d.clone(),
+                mobile,
+            ))),
+            OutboundKind::Vless(v) => {
+                Ok(Self::Vless(Vless::new(cfg.tag.clone(), v.clone(), mobile)?))
+            }
             OutboundKind::Block => Ok(Self::Block(BlockOutbound {
                 tag: cfg.tag.clone(),
             })),
@@ -78,11 +85,11 @@ pub struct BlockOutbound {
 }
 
 /// Builder for the [`DirectOutbound`] variant — re-exported as `Direct::new`.
-pub fn direct(tag: String, cfg: DirectOutbound) -> Direct {
-    Direct::new(tag, cfg)
+pub fn direct(tag: String, cfg: DirectOutbound, mobile: &MobileConfig) -> Direct {
+    Direct::new(tag, cfg, mobile)
 }
 
 /// Builder for the VLESS variant — re-exported as `Vless::new`.
-pub fn vless(tag: String, cfg: VlessCfg) -> Result<Vless> {
-    Vless::new(tag, cfg)
+pub fn vless(tag: String, cfg: VlessCfg, mobile: &MobileConfig) -> Result<Vless> {
+    Vless::new(tag, cfg, mobile)
 }

@@ -9,8 +9,11 @@ members = [
     "crates/mirage-transport-xhttp",
     "crates/mirage-vision",
     "crates/mirage-mobile",
+    "crates/mirage-net",
+    "crates/mirage-io",
     "crates/mirage-engine",
     "crates/mirage-cli",
+    "crates/mirage-bench",
 ]
 
 [workspace.package]
@@ -70,6 +73,7 @@ anyhow = "1.0"
 once_cell = "1.20"
 parking_lot = "0.12"
 ahash = "0.8"
+socket2 = { version = "0.5", features = ["all"] }
 
 # Internal crates (referenced by version+path)
 mirage-core = { path = "crates/mirage-core", version = "0.1.0" }
@@ -80,6 +84,8 @@ mirage-transport-raw = { path = "crates/mirage-transport-raw", version = "0.1.0"
 mirage-transport-xhttp = { path = "crates/mirage-transport-xhttp", version = "0.1.0" }
 mirage-vision = { path = "crates/mirage-vision", version = "0.1.0" }
 mirage-mobile = { path = "crates/mirage-mobile", version = "0.1.0" }
+mirage-net = { path = "crates/mirage-net", version = "0.1.0" }
+mirage-io = { path = "crates/mirage-io", version = "0.1.0" }
 mirage-engine = { path = "crates/mirage-engine", version = "0.1.0" }
 
 [profile.release]

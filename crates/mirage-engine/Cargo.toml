@@ -16,6 +16,8 @@ mirage-transport-raw = { workspace = true }
 mirage-transport-xhttp = { workspace = true }
 mirage-vision = { workspace = true }
 mirage-mobile = { workspace = true }
+mirage-net = { workspace = true }
+mirage-io = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }

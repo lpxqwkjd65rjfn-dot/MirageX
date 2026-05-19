@@ -586,7 +586,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -703,6 +703,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mirage-bench"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "mirage-core",
+ "mirage-io",
+ "mirage-mobile",
+ "mirage-net",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "mirage-cli"
 version = "0.1.0"
 dependencies = [
@@ -751,7 +767,9 @@ dependencies = [
  "bytes",
  "mirage-config",
  "mirage-core",
+ "mirage-io",
  "mirage-mobile",
+ "mirage-net",
  "mirage-proto-vless",
  "mirage-tls-reality",
  "mirage-transport-raw",
@@ -768,6 +786,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mirage-io"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "mirage-core",
+ "mirage-mobile",
+ "parking_lot",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mirage-mobile"
 version = "0.1.0"
 dependencies = [
@@ -775,6 +806,19 @@ dependencies = [
  "mirage-config",
  "mirage-core",
  "parking_lot",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "mirage-net"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mirage-config",
+ "mirage-core",
+ "mirage-mobile",
+ "socket2 0.5.10",
  "tokio",
  "tracing",
 ]
@@ -1188,6 +1232,16 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "socket2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "socket2"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
@@ -1281,7 +1335,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.6.3",
  "tokio-macros",
  "windows-sys 0.61.2",
 ]

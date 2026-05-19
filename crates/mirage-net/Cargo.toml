@@ -1,0 +1,21 @@
+[package]
+name = "mirage-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "MirageX — TCP socket-options layer + happy-eyeballs dialer + listener builder. The single place every TCP file-descriptor in the engine goes through, so the latency knobs (NODELAY, TFO, TCP_USER_TIMEOUT, SNDBUF/RCVBUF, DSCP, …) actually take effect."
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+socket2 = { workspace = true }
+futures = { workspace = true }
+
+mirage-core = { workspace = true }
+mirage-mobile = { workspace = true }
+mirage-config = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
