@@ -39,8 +39,10 @@ pub mod auth;
 pub mod config;
 pub mod connector;
 pub mod fingerprint;
+pub mod handshake;
 pub mod hello;
 pub mod keys;
+pub mod record;
 pub mod wire;
 
 pub use aead::{Aead, AeadKind};
@@ -48,5 +50,11 @@ pub use auth::{auth_key, auth_signature};
 pub use config::RealityConfig;
 pub use connector::RealityConnector;
 pub use fingerprint::{Fingerprint, Profile};
+pub use handshake::{forge_handshake, HandshakeKeys};
 pub use hello::{parse_server_hello, ClientHello, ClientHelloBuilder, ServerHello};
 pub use keys::{KeySchedule, Transcript};
+pub use record::{
+    parse_record_header, RecordCipher, RecordHeader, MAX_CIPHERTEXT_LEN, MAX_PLAINTEXT_LEN,
+    RECORD_ALERT, RECORD_APPLICATION_DATA, RECORD_CHANGE_CIPHER_SPEC, RECORD_HANDSHAKE,
+    RECORD_HEADER_LEN,
+};
