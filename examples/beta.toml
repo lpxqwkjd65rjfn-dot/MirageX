@@ -1,0 +1,56 @@
+# =====================================================================
+# MirageX BETA — minimal stable config (Direct only)
+# =====================================================================
+#
+# This is the **canary** beta config used by the runbook smoke test and
+# verified by the engine's loopback integration test
+# (`crates/mirage-engine/tests/loopback_socks5.rs`).
+#
+# What it does:
+#   * Binds a SOCKS5 inbound on 127.0.0.1:1080.
+#   * Forwards everything through a Direct outbound (no proxy).
+#
+# What it is for:
+#   * Confirming `miragex` actually boots and pipes bytes through on a
+#     fresh install. If THIS config doesn't work, none of the others will.
+#   * A safe default to fall back to while debugging a more complex
+#     setup (Reality, Vision, XHTTP).
+#
+# For the actual proxying recipes see:
+#   * `client-reality-vision.toml`   — VLESS + Reality + Vision + RAW TCP
+#   * `client-reality-xhttp.toml`    — VLESS + Reality + XHTTP (in-progress)
+#
+# Smoke test (Linux/macOS):
+#   $ miragex run -c examples/beta.toml &
+#   $ curl --socks5-hostname 127.0.0.1:1080 https://api.ipify.org
+#
+# You should see an IP address echoed back. If you don't, file an issue.
+
+[log]
+level  = "info"
+format = "text"
+
+[[inbounds]]
+tag       = "socks-in"
+listen    = "127.0.0.1:1080"
+type      = "socks"
+allow_tcp = true
+allow_udp = false
+sniffing  = true
+
+[[outbounds]]
+tag             = "direct"
+protocol        = "direct"
+domain_strategy = "as-is"
+
+[routing]
+final_outbound = "direct"
+
+# The mobile block is enabled with safe defaults so the kernel socket
+# options (NODELAY, USER_TIMEOUT, large SNDBUF/RCVBUF) get applied.
+# Turn it off if you suspect a kernel-level interaction is causing
+# trouble while debugging.
+[mobile]
+enabled    = true
+congestion = "default"
+prewarm    = 0
