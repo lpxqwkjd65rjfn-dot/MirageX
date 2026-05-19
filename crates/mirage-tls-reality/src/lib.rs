@@ -34,10 +34,19 @@
     clippy::unnecessary_wraps
 )]
 
+pub mod aead;
 pub mod auth;
 pub mod config;
 pub mod connector;
+pub mod fingerprint;
+pub mod hello;
+pub mod keys;
+pub mod wire;
 
+pub use aead::{Aead, AeadKind};
 pub use auth::{auth_key, auth_signature};
 pub use config::RealityConfig;
 pub use connector::RealityConnector;
+pub use fingerprint::{Fingerprint, Profile};
+pub use hello::{parse_server_hello, ClientHello, ClientHelloBuilder, ServerHello};
+pub use keys::{KeySchedule, Transcript};
