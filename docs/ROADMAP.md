@@ -2,13 +2,21 @@
 
 This is the public TODO list. Items are grouped by priority bucket.
 
+See [`BETA-RUNBOOK.md`](BETA-RUNBOOK.md) for the current beta release
+status (what works today, what doesn't, smoke-test recipe).
+
 ## P0 — finish the reference stack
 
-* [ ] Forged-ClientHello path inside `mirage-tls-reality::RealityConnector`
-      (uTLS-style fingerprints: Chrome, Firefox, Safari, iOS, random).
+* [x] Forged-ClientHello wire-format primitives inside
+      `mirage-tls-reality` (wire / keys / aead / fingerprint / hello).
+      Foundation merged; connector swap still pending.
+* [ ] Wire the forged-ClientHello + Reality auth signature into
+      `RealityConnector::connect` so the live handshake replaces the
+      current plain-rustls path.
 * [ ] HTTP/2 stream plumbing inside `mirage-transport-xhttp` (single-stream
       mode, then packet-split mode).
-* [ ] Vision splice fast-path inside `mirage-vision` + engine integration.
+* [ ] Vision splice fast-path inside `mirage-vision` + engine integration
+      (the flow marker on the VLESS addons is already emitted).
 * [ ] UDP CONNECT path for VLESS (UoT-style + native UDP-ASSOCIATE).
 * [ ] `mirage-cli`: `subscribe` subcommand that consumes a subscription URL.
 
