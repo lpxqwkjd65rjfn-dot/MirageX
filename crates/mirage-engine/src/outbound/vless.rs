@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use bytes::BytesMut;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 use mirage_config::mobile::MobileConfig;
 use mirage_config::outbound::{RealityConfig as RealityCfgInput, VlessOutbound as VlessCfg};
@@ -54,6 +54,35 @@ impl Vless {
         } else {
             None
         };
+        // Surface configured posture once at startup so operators can confirm
+        // what's actually wired (e.g. that flow=xtls-rprx-vision arrived from
+        // the config). The runtime path then proceeds without logging on the
+        // hot dial path.
+        let transport_kind = match &cfg.transport {
+            TransportSettings::Raw(_) => "raw",
+            TransportSettings::Xhttp(_) => "xhttp (unimplemented — beta)",
+            TransportSettings::HttpUpgrade(_) => "httpupgrade (unimplemented — beta)",
+            TransportSettings::Websocket(_) => "websocket (unimplemented — beta)",
+            TransportSettings::Grpc(_) => "grpc (unimplemented — beta)",
+        };
+        let fingerprint = cfg
+            .reality
+            .as_ref()
+            .map_or("none", |r| r.fingerprint.as_str());
+        let flow = if cfg.flow.is_empty() {
+            "<none>"
+        } else {
+            cfg.flow.as_str()
+        };
+        info!(
+            tag = %tag,
+            server = %cfg.server,
+            transport = %transport_kind,
+            tls = if reality.is_some() { "reality" } else { "none" },
+            fingerprint = %fingerprint,
+            flow = %flow,
+            "vless outbound configured"
+        );
         let opts = options_from_mobile(mobile);
         let family_order = FamilyOrder::default();
         let prewarm = if mobile.enabled && mobile.prewarm > 0 {
