@@ -1,12 +1,26 @@
-//! `RealityConnector` — the high-level Reality client API. Today this is a
-//! thin wrapper around `tokio-rustls` that hard-codes the SNI to the value
-//! supplied in [`RealityConfig::server_name`] and short-circuits certificate
-//! verification with a custom `ServerCertVerifier` that exposes the same
-//! interface the full forged-hello path will need.
+//! `RealityConnector` — the high-level Reality client API.
 //!
-//! The forged-hello + key-extraction + record-stream-swap path will land
-//! incrementally. The public API is intentionally kept stable so the engine
-//! can already plug Reality into its outbound dispatcher.
+//! Two modes:
+//!
+//! * [`RealityConnector::connect`] — the *compat* path: a plain
+//!   `tokio-rustls` handshake that short-circuits certificate
+//!   verification (custom `ServerCertVerifier`). The bytes on the wire
+//!   are produced by `rustls`, **not** by the forged-hello builder, so
+//!   the JA3 fingerprint is rustls's, not Chrome's. Useful for talking
+//!   to ordinary VLESS-over-TLS servers (`tls = "tls"` in our config).
+//!
+//! * [`RealityConnector::connect_forged`] — the **Reality** path: emits
+//!   a forged TLS 1.3 ClientHello matching the requested browser
+//!   fingerprint (Chrome 120 by default) with the Reality auth
+//!   signature embedded in `session_id`, reads the server's
+//!   `ServerHello`, derives the TLS 1.3 handshake-traffic key schedule
+//!   per RFC 8446 §7.1, and hands the caller back a [`ForgedSession`]
+//!   bundling the raw stream and the derived [`HandshakeKeys`].
+//!   That is precisely what a DPI sees on the wire — handshake
+//!   indistinguishability is achieved at this layer; the rest of the
+//!   handshake (encrypted `Certificate` / `Finished`) and the
+//!   application-data record layer is the consumer's job (it lives in
+//!   the engine, behind a feature flag, and ships incrementally).
 
 use std::sync::Arc;
 
@@ -16,11 +30,13 @@ use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
-use tracing::trace;
+use tracing::{debug, trace};
 
 use mirage_core::error::{Error, Result};
 
 use crate::config::RealityConfig;
+use crate::fingerprint::Fingerprint;
+use crate::handshake::{forge_handshake, HandshakeKeys};
 
 /// High-level Reality connector.
 #[derive(Clone)]
@@ -58,7 +74,12 @@ impl RealityConnector {
         &self.cfg
     }
 
-    /// Wrap an existing stream with a forged Reality TLS handshake.
+    /// Wrap an existing stream with a plain `tokio-rustls` TLS 1.3
+    /// handshake. Certificate verification is skipped (Reality's design
+    /// intentionally accepts the upstream target's real cert).
+    ///
+    /// **Does not** emit a forged Chrome-style ClientHello — for that,
+    /// use [`Self::connect_forged`].
     ///
     /// # Errors
     /// Propagates any TLS / I/O error from the underlying TLS connector.
@@ -69,7 +90,7 @@ impl RealityConnector {
         trace!(
             sni = %self.cfg.server_name,
             fp = %self.cfg.fingerprint,
-            "reality: starting handshake (forged-hello pending)"
+            "reality: starting compat (rustls) handshake"
         );
         let sni = ServerName::try_from(self.cfg.server_name.clone())
             .map_err(|e| Error::tls(format!("reality: invalid SNI: {e}")))?;
@@ -79,6 +100,76 @@ impl RealityConnector {
             .await
             .map_err(|e| Error::tls(e.to_string()))?;
         Ok(tls)
+    }
+
+    /// Drive the *forged* Reality TLS 1.3 handshake on `stream`. Emits a
+    /// ClientHello that matches the fingerprint requested in
+    /// [`RealityConfig::fingerprint`] (falling back to Chrome 120 when
+    /// the string is unrecognised), with the Reality auth signature
+    /// embedded in the session id. Reads the server's `ServerHello`,
+    /// runs the X25519 DHE against the announced ephemeral key, and
+    /// derives the TLS 1.3 handshake-traffic key schedule.
+    ///
+    /// Returns a [`ForgedSession`] bundling the raw stream (positioned
+    /// right after the cleartext `ServerHello` record) with the derived
+    /// [`HandshakeKeys`]. The encrypted handshake flight
+    /// (`EncryptedExtensions` / `Certificate` / `CertificateVerify` /
+    /// server `Finished`) and the corresponding application-data record
+    /// layer ship in the engine layer; this method is the protocol
+    /// piece every Reality client shares and that is the part DPI
+    /// observers see on the wire.
+    ///
+    /// # Errors
+    /// * [`Error::Tls`] for any malformed record / hello / unsupported
+    ///   cipher suite.
+    /// * I/O errors from the underlying stream are surfaced through
+    ///   [`Error::Io`].
+    pub async fn connect_forged<IO>(&self, mut stream: IO) -> Result<ForgedSession<IO>>
+    where
+        IO: AsyncRead + AsyncWrite + Unpin,
+    {
+        let fingerprint = Fingerprint::from_str_or_chrome(&self.cfg.fingerprint);
+        debug!(
+            sni = %self.cfg.server_name,
+            fp = ?fingerprint,
+            short_id_len = self.cfg.short_id.len(),
+            "reality: starting forged-hello handshake"
+        );
+        let keys = forge_handshake(&mut stream, &self.cfg, fingerprint).await?;
+        debug!(
+            sni = %keys.server_name,
+            cipher = format_args!("{:#06x}", keys.cipher_suite),
+            "reality: forged-hello handshake produced handshake-traffic keys"
+        );
+        Ok(ForgedSession { stream, keys })
+    }
+}
+
+/// Output of [`RealityConnector::connect_forged`] — the raw stream
+/// (positioned just past the cleartext `ServerHello` record) bundled
+/// with the TLS 1.3 handshake-traffic key schedule.
+///
+/// The encrypted handshake flight (`EncryptedExtensions` /
+/// `Certificate` / `CertificateVerify` / server `Finished`) and the
+/// application-data record pump are the consumer's responsibility —
+/// the corresponding building blocks live in [`crate::record`] and the
+/// engine layer composes them.
+#[derive(Debug)]
+pub struct ForgedSession<IO> {
+    /// Raw byte stream, positioned right after the server's cleartext
+    /// `ServerHello` record. The next bytes the server sends will be a
+    /// (legacy-compat) `ChangeCipherSpec` and then encrypted handshake
+    /// records.
+    pub stream: IO,
+    /// All secrets needed to bootstrap the AEAD record layer for the
+    /// encrypted-handshake flight.
+    pub keys: HandshakeKeys,
+}
+
+impl<IO> ForgedSession<IO> {
+    /// Split the session into its component parts.
+    pub fn into_parts(self) -> (IO, HandshakeKeys) {
+        (self.stream, self.keys)
     }
 }
 
